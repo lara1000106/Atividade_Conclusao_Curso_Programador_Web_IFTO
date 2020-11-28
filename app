@@ -1,0 +1,815 @@
+2  Dockerfile 
+@@ -0,0 +1,2 @@
+FROM php:7.1-fpm
+RUN docker-php-ext-install pdo_mysql
+ 18  README.md 
+@@ -1 +1,17 @@
+# atividadefinal
+# Model View Controller - Design Pattern para PHP
+
+## Modelos
+
+Todas as funções do banco de dados são armazenadas aqui.
+Cada tabela tem seu próprio objeto dentro da pasta do modelo.
+
+## Visualizações
+
+Todas as páginas da web são armazenadas aqui.
+Cada página tem sua própria pasta com um index.php.
+Todos os dados são passados para a visualização por meio da variável \$ data.
+
+## Controller
+
+Todas as funcionalidades são armazenadas aqui.
+Todos os modelos são chamados dentro dos controladores e podem ser modificados e depois passados para a visualização.
+ 58  app/controllers/Contact.php 
+@@ -0,0 +1,58 @@
+<?php
+
+class Contact extends Controller {
+
+
+    // Index of the home page (localhost/home(/index))
+    public function index($param1= '', $param2= '', $param3= '') {
+
+        // Initialize Alunos model
+        $test = $this->model('Alunos');
+
+        // Call function from the model
+        $testData = $test->getAlunosFunction();
+
+        $this->view('contact/index', ['alunos' => $testData]);
+    }
+    public function teste($param1= '', $param2= '', $param3= ''){
+        $test = $this->model('Alunos');
+        $alunos = $test->getAlunosForName($param2);
+        $this->view('contact/index', ['alunos' => $alunos]);
+    }
+    public function aluno($id){
+        $aluno = $this->model('Alunos');
+        $valor = $aluno->getAlunoForId($id);
+        return $valor;
+    }
+    public function adicionaAluno(){
+        $nome = $_POST["nome"];
+        $idade = $_POST["idade"];
+        $aluno = $this->model('Alunos');
+       if($aluno->createAluno([$nome,$idade]))
+       echo "cadastro executado com sucesso!!";
+    }
+    public function alteraAluno(){
+        $id = $_POST["id"];
+        $nome = $_POST["nome"];
+        $idade = $_POST["idade"];
+
+        $aluno = $this->model('Alunos');
+       if($aluno->alterAluno([$nome,$idade,$id]))
+       echo "cadastro alterado com sucesso!!";
+    }
+
+    public function  formAlter($param1= '', $param2= '', $param3= ''){
+        $aluno = $this->aluno($param2);
+        $this->view('contact/form2', ['aluno' => $aluno[0]]);
+
+    }
+    public function deleteAluno($param1= '', $param2= '', $param3= ''){
+        $id = $param2;
+        $aluno = $this->model('Alunos');
+       if($aluno->deleteAluno([$id]))
+       echo "cadastro excluido com sucesso!!";
+
+    }
+}
+
+?> 
+ 14  app/controllers/Home.php 
+@@ -0,0 +1,14 @@
+<?php
+class Home extends Controller {
+
+    public function index($param1= '', $param2= '', $param3= '') {
+        $this->view('home/index');
+    } 
+    public function form(){
+        echo "esse e seu formulario";
+    }
+    public function cadastro(){
+        echo "voce foi cadastrado";
+    }
+}
+?> 
+ 49  app/core/App.php 
+@@ -0,0 +1,49 @@
+<?php
+
+class App
+{
+    protected $controller = 'home';
+    protected $method = 'index';
+    protected $params = [];
+
+    public function __construct() {
+        // Parse url into readable string
+        $url = $this->parseUrl();
+
+
+        // Get controller
+        if (file_exists('../app/controllers/' . $url[1] . '.php')) {
+            $this->controller = $url[1];
+            unset($url[1]);
+        }
+        //$this->controller ='contact';
+
+        // If controller (url[0]) doesn't exist it will use 'home' automatically
+        require_once '../app/controllers/' . $this->controller . '.php';
+
+        // Create a new instance of the controller
+        $this->controller = new $this->controller;
+
+        // Get method
+        if (isset($url[2])) {
+            if (method_exists($this->controller, $url[2])) {
+                $this->method = $url[2];
+                unset($url[2]);
+            }
+        }
+
+        // Get parameters
+        $this->params = $url ? array_values($url) : [];
+
+        // Calls the specific controller, method and pass the parameters to them
+        call_user_func_array([$this->controller, $this->method], $this->params);
+    }
+
+    // Parse url  into useable array
+    private function parseUrl() {
+        if (isset($_SERVER['REQUEST_URI']))
+            return $url = explode('/', filter_var(rtrim($_SERVER['REQUEST_URI'], '/'), FILTER_SANITIZE_URL));
+    }
+}
+
+?> 
+ 17  app/core/Controller.php 
+@@ -0,0 +1,17 @@
+<?php
+
+class Controller {
+
+    // Create a new instance of a model
+    protected function model($model) {
+        require_once '../app/models/' . $model . '.php';
+        return new $model();
+    }
+
+    // Load data to a specific view
+    protected function view($view, $data = []) {
+        require_once '../app/views/' . $view . '.php';
+    }
+}
+
+?> 
+ 29  app/core/Database.php 
+@@ -0,0 +1,29 @@
+<?php
+
+class Database {
+
+
+
+    private static function connect() {
+        $pdo =  new PDO('mysql:host=mysql;dbname=aula', 'root', '12345');
+        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_OBJ);
+        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+        return $pdo;
+    }
+
+    public static function query($query, $params = array()) {
+        $stmt = self::connect()->prepare($query);
+        $stmt->execute($params);
+        $data = $stmt->fetchAll();
+        return $data;
+    }
+
+    public static function add($sql, $params = array()){
+
+        $stmt = self::connect()->prepare($sql);
+        $stmt->execute($params);
+        return true;
+    }
+}
+
+?> 
+ 6  app/init.php 
+@@ -0,0 +1,6 @@
+<?php
+    // Include all the core files
+    require_once 'core/App.php';
+    require_once 'core/Controller.php';
+    require_once 'core/Database.php';
+?> 
+ 29  app/models/Alunos.php 
+@@ -0,0 +1,29 @@
+<?php
+
+class Alunos {
+
+
+    public function getAlunosFunction() {
+        return Database::query("SELECT * FROM alunos");
+    }
+    public function getAlunosForName($nome){
+        return Database::query("SELECT * FROM alunos where nome = ?", [$nome]);
+    }
+    public function getAlunoForId($id){
+        return Database::query("SELECT * FROM alunos where idalunos = ?", [$id]);
+    }
+    public function createAluno($valores){
+        return Database::add($sql = "INSERT INTO `aula`.`alunos` (`nome`, `idade`) VALUES (?, ?)", $valores);
+    } 
+    public function alterAluno($valores){
+        $sql ="UPDATE `aula`.`alunos` SET `nome` = ?, `idade` = ? WHERE (`idalunos` = ?);";
+        return Database::add ($sql,$valores);
+    }
+
+    public function deleteAluno($valores){
+        $sql ="DELETE FROM `aula`.`alunos` WHERE (`idalunos` = ?)";
+        return Database::add ($sql,$valores);
+    }
+}
+
+?> 
+ 16  app/views/contact/filtro.php 
+@@ -0,0 +1,16 @@
+<html>
+    <head>
+
+    </head>
+    <body>
+        <h1>Lista de alunos por nome</h1>
+        <ul>
+        <?php
+
+            foreach($data['alunos'] as $aluno){
+                echo "<li>".$aluno->nome." tem ".$aluno->idade." anos;</li>";
+            }
+        ?>
+       <ul>
+    </body>
+</html> 
+ 56  app/views/contact/form2.php 
+@@ -0,0 +1,56 @@
+<?php $aluno = $data['aluno'];?>
+<?php 
+    $this->view('home/cabecario');
+?>
+<form name="cadastro" action="http://localhost:8080/contact/alteraAluno" method="POST">
+  <div class="form-group row">
+    <label class="col-4 col-form-label" for="nome">Nome</label> 
+    <div class="col-8">
+      <div class="input-group">
+        <div class="input-group-prepend">
+          <div class="input-group-text">
+            <i class="fa fa-address-card"></i>
+          </div>
+        </div> 
+        <input id="id" name="id" type="hidden" value="<?=$aluno->idalunos;?>">
+        <input id="nome" name="nome" value="<?=$aluno->nome;?>" placeholder="informe seu nome" type="text" class="form-control" aria-describedby="nomeHelpBlock" required="required">
+      </div> 
+      <span id="nomeHelpBlock" class="form-text text-muted">Informe seu nome completo</span>
+    </div>
+  </div>
+  <div class="form-group row">
+    <label for="idade" class="col-4 col-form-label">Idade</label> 
+    <div class="col-8">
+      <div class="input-group">
+        <div class="input-group-prepend">
+          <div class="input-group-text">
+            <i class="fa fa-bullseye"></i>
+          </div>
+        </div> 
+        <input id="idade" name="idade" value="<?=$aluno->idade;?>" placeholder="informe sua idade" type="text" required="required" class="form-control">
+      </div>
+    </div>
+  </div>
+  <div class="form-group row">
+    <label class="col-4">Sexo</label> 
+    <div class="col-8">
+      <div class="custom-control custom-radio custom-control-inline">
+        <input name="radio" id="radio_0" type="radio" class="custom-control-input" value="masc"> 
+        <label for="radio_0" class="custom-control-label">Masculino</label>
+      </div>
+      <div class="custom-control custom-radio custom-control-inline">
+        <input name="radio" id="radio_1" type="radio" class="custom-control-input" value="fem"> 
+        <label for="radio_1" class="custom-control-label">Feminino</label>
+      </div>
+    </div>
+  </div> 
+  <div class="form-group row">
+    <div class="offset-4 col-8">
+      <button name="submit" type="submit" class="btn btn-primary">Enviar</button>
+    </div>
+  </div>
+</form>
+
+<?php 
+    $this->view('home/rodape');
+?> 
+ 16  app/views/contact/index.php 
+@@ -0,0 +1,16 @@
+<html>
+    <head>
+
+    </head>
+    <body>
+        <h1>Lista de alunos</h1>
+        <ul>
+        <?php
+
+            foreach($data['alunos'] as $aluno){
+                echo "<li>".$aluno->nome." tem ".$aluno->idade." anos;</li>";
+            }
+        ?>
+       <ul>
+    </body>
+</html> 
+ 24  app/views/home/cabecario.php 
+@@ -0,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="description" content="" />
+    <meta name="author" content="" />
+    <title>Aula programacao web</title>
+    <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
+    <!-- Font Awesome icons (free version)-->
+    <script src="https://use.fontawesome.com/releases/v5.15.1/js/all.js" crossorigin="anonymous"></script>
+    <!-- Google fonts-->
+    <link href="https://fonts.googleapis.com/css?family=Saira+Extra+Condensed:500,700" rel="stylesheet"
+        type="text/css" />
+    <link href="https://fonts.googleapis.com/css?family=Muli:400,400i,800,800i" rel="stylesheet" type="text/css" />
+    <!-- Core theme CSS (includes Bootstrap)-->
+    <link href="css/styles.css" rel="stylesheet" />
+</head>
+<body id="page-top"> 
+ 49  app/views/home/form.php 
+@@ -0,0 +1,49 @@
+
+
+<form name="cadastro" action="http://localhost:8080/contact/adicionaAluno" method="POST">
+  <div class="form-group row">
+    <label class="col-4 col-form-label" for="nome">Nome</label> 
+    <div class="col-8">
+      <div class="input-group">
+        <div class="input-group-prepend">
+          <div class="input-group-text">
+            <i class="fa fa-address-card"></i>
+          </div>
+        </div> 
+        <input id="nome" name="nome" placeholder="informe seu nome" type="text" class="form-control" aria-describedby="nomeHelpBlock" required="required">
+      </div> 
+      <span id="nomeHelpBlock" class="form-text text-muted">Informe seu nome completo</span>
+    </div>
+  </div>
+  <div class="form-group row">
+    <label for="idade" class="col-4 col-form-label">Idade</label> 
+    <div class="col-8">
+      <div class="input-group">
+        <div class="input-group-prepend">
+          <div class="input-group-text">
+            <i class="fa fa-bullseye"></i>
+          </div>
+        </div> 
+        <input id="idade" name="idade" placeholder="informe sua idade" type="text" required="required" class="form-control">
+      </div>
+    </div>
+  </div>
+  <div class="form-group row">
+    <label class="col-4">Sexo</label> 
+    <div class="col-8">
+      <div class="custom-control custom-radio custom-control-inline">
+        <input name="radio" id="radio_0" type="radio" class="custom-control-input" value="masc"> 
+        <label for="radio_0" class="custom-control-label">Masculino</label>
+      </div>
+      <div class="custom-control custom-radio custom-control-inline">
+        <input name="radio" id="radio_1" type="radio" class="custom-control-input" value="fem"> 
+        <label for="radio_1" class="custom-control-label">Feminino</label>
+      </div>
+    </div>
+  </div> 
+  <div class="form-group row">
+    <div class="offset-4 col-8">
+      <button name="submit" type="submit" class="btn btn-primary">Enviar</button>
+    </div>
+  </div>
+</form> 
+ 206  app/views/home/index.php 
+@@ -0,0 +1,206 @@
+<?php 
+    $this->view('home/cabecario');
+?>
+<!-- Navigation-->
+<?php
+            $this->view('home/menu');
+        ?>
+<!-- Page Content-->
+<div class="container-fluid p-0">
+    <!-- About-->
+    <section class="resume-section" id="about">
+        <div class="resume-section-content">
+            <h1 class="mb-0">
+                Ficticio
+                <span class="text-primary">Mario Teixeira</span>
+            </h1>
+            <div class="subheading mb-5">
+                3542 Rua Azul · Centro, Salvador - Bahia, CO 80810 · +55(071) 010101-1111 ·
+                <a href="mailto:marionametx@email.com">marionametx@email.com</a>
+            </div>
+            <p class="lead mb-5">I am experienced in leveraging agile frameworks to provide a robust synopsis for high
+                level overviews. Iterative approaches to corporate strategy foster collaborative thinking to further the
+                overall value proposition.</p>
+            <div class="social-icons">
+                <a class="social-icon" href="#"><i class="fab fa-linkedin-in"></i></a>
+                <a class="social-icon" href="#"><i class="fab fa-github"></i></a>
+                <a class="social-icon" href="#"><i class="fab fa-twitter"></i></a>
+                <a class="social-icon" href="#"><i class="fab fa-facebook-f"></i></a>
+            </div>
+        </div>
+    </section>
+    <hr class="m-0" />
+    <!-- Experience-->
+    <section class="resume-section" id="experience">
+        <div class="resume-section-content">
+            <h2 class="mb-5">Experience</h2>
+            <div class="d-flex flex-column flex-md-row justify-content-between mb-5">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Senior Web Developer</h3>
+                    <div class="subheading mb-3">Intelitec Solutions</div>
+                    <p>Bring to the table win-win survival strategies to ensure proactive domination. At the end of the
+                        day, going forward, a new normal that has evolved from generation X is on the runway heading
+                        towards a streamlined cloud solution. User generated content in real-time will have multiple
+                        touchpoints for offshoring.</p>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">March 2013 - Present</span></div>
+            </div>
+            <div class="d-flex flex-column flex-md-row justify-content-between mb-5">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Web Developer</h3>
+                    <div class="subheading mb-3">Intelitec Solutions</div>
+                    <p>Capitalize on low hanging fruit to identify a ballpark value added activity to beta test.
+                        Override the digital divide with additional clickthroughs from DevOps. Nanotechnology immersion
+                        along the information highway will close the loop on focusing solely on the bottom line.</p>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">December 2011 - March 2013</span></div>
+            </div>
+            <div class="d-flex flex-column flex-md-row justify-content-between mb-5">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Junior Web Designer</h3>
+                    <div class="subheading mb-3">Shout! Media Productions</div>
+                    <p>Podcasting operational change management inside of workflows to establish a framework. Taking
+                        seamless key performance indicators offline to maximise the long tail. Keeping your eye on the
+                        ball while performing a deep dive on the start-up mentality to derive convergence on
+                        cross-platform integration.</p>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">July 2010 - December 2011</span></div>
+            </div>
+            <div class="d-flex flex-column flex-md-row justify-content-between">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Web Design Intern</h3>
+                    <div class="subheading mb-3">Shout! Media Productions</div>
+                    <p>Collaboratively administrate empowered markets via plug-and-play networks. Dynamically
+                        procrastinate B2C users after installed base benefits. Dramatically visualize customer directed
+                        convergence without revolutionary ROI.</p>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">September 2008 - June 2010</span></div>
+            </div>
+        </div>
+    </section>
+    <hr class="m-0" />
+    <!-- Education-->
+    <section class="resume-section" id="education">
+        <div class="resume-section-content">
+            <h2 class="mb-5">Education</h2>
+            <div class="d-flex flex-column flex-md-row justify-content-between mb-5">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Universidade Federal do Rio Grande do Norte - IFRN</h3>
+                    <div class="subheading mb-3">Bachelor of Science</div>
+                    <div>Computer Science - Web Development Track</div>
+                    <p>GPA: 3.23</p>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">August 2006 - May 2010</span></div>
+            </div>
+            <div class="d-flex flex-column flex-md-row justify-content-between">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Universidade Federal Sul de Minas - IFSul de Minas</h3>
+                    <div class="subheading mb-3">Technology Magnet Program</div>
+                    <p>GPA: 3.56</p>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">August 2002 - May 2006</span></div>
+            </div>
+        </div>
+    </section>
+    <hr class="m-0" />
+    <!-- Skills-->
+    <section class="resume-section" id="skills">
+        <div class="resume-section-content">
+            <h2 class="mb-5">Skills</h2>
+            <div class="subheading mb-3">Programming Languages & Tools</div>
+            <ul class="list-inline dev-icons">
+                <li class="list-inline-item"><i class="fab fa-html5"></i></li>
+                <li class="list-inline-item"><i class="fab fa-css3-alt"></i></li>
+                <li class="list-inline-item"><i class="fab fa-js-square"></i></li>
+                <li class="list-inline-item"><i class="fab fa-angular"></i></li>
+                <li class="list-inline-item"><i class="fab fa-react"></i></li>
+                <li class="list-inline-item"><i class="fab fa-node-js"></i></li>
+                <li class="list-inline-item"><i class="fab fa-sass"></i></li>
+                <li class="list-inline-item"><i class="fab fa-less"></i></li>
+                <li class="list-inline-item"><i class="fab fa-wordpress"></i></li>
+                <li class="list-inline-item"><i class="fab fa-gulp"></i></li>
+                <li class="list-inline-item"><i class="fab fa-grunt"></i></li>
+                <li class="list-inline-item"><i class="fab fa-npm"></i></li>
+            </ul>
+            <div class="subheading mb-3">Workflow</div>
+            <ul class="fa-ul mb-0">
+                <li>
+                    <span class="fa-li"><i class="fas fa-check"></i></span>
+                    Mobile-First, Responsive Design
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-check"></i></span>
+                    Cross Browser Testing & Debugging
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-check"></i></span>
+                    Cross Functional Teams
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-check"></i></span>
+                    Agile Development & Scrum
+                </li>
+            </ul>
+        </div>
+    </section>
+    <hr class="m-0" />
+    <!-- Interests-->
+    <section class="resume-section" id="interests">
+        <div class="resume-section-content">
+            <?php 
+                    $this->view('home/form');
+                ?>
+        </div>
+    </section>
+    <hr class="m-0" />
+    <!-- Awards-->
+    <section class="resume-section" id="awards">
+        <div class="resume-section-content">
+            <h2 class="mb-5">Awards & Certifications</h2>
+            <ul class="fa-ul mb-0">
+                <li>
+                    <span class="fa-li"><i class="fas fa-trophy text-warning"></i></span>
+                    Google Analytics Certified Developer
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-trophy text-warning"></i></span>
+                    Mobile Web Specialist - Google Certification
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-trophy text-warning"></i></span>
+                    1
+                    <sup>st</sup>
+                    Place - University of Colorado Boulder - Emerging Tech Competition 2009
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-trophy text-warning"></i></span>
+                    1
+                    <sup>st</sup>
+                    Place - University of Colorado Boulder - Adobe Creative Jam 2008 (UI Design Category)
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-trophy text-warning"></i></span>
+                    2
+                    <sup>nd</sup>
+                    Place - University of Colorado Boulder - Emerging Tech Competition 2008
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-trophy text-warning"></i></span>
+                    1
+                    <sup>st</sup>
+                    Place - James Buchanan High School - Hackathon 2006
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-trophy text-warning"></i></span>
+                    3
+                    <sup>rd</sup>
+                    Place - James Buchanan High School - Hackathon 2005
+                </li>
+            </ul>
+        </div>
+    </section>
+</div>
+
+<?php 
+    $this->view('home/rodape');
+?> 
+ 20  app/views/home/menu.php 
+@@ -0,0 +1,20 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top" id="sideNav">
+    <a class="navbar-brand js-scroll-trigger" href="#page-top">
+        <span class="d-block d-lg-none">Mario Ficticio Teixeira</span>
+        <span class="d-none d-lg-block"><img class="img-fluid img-profile rounded-circle mx-auto mb-2"
+                src="assets/img/profile.jpg" alt="" /></span>
+    </a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent"
+        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span
+            class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav">
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#about">Quem sou eu</a></li>
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#experience">Experience</a></li>
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#education">Education</a></li>
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#skills">Skills</a></li>
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#interests">Formulario</a></li>
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#awards">Awards</a></li>
+        </ul>
+    </div>
+</nav> 
+ 9  app/views/home/rodape.php 
+@@ -0,0 +1,9 @@
+ <!-- Bootstrap core JS-->
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"></script>
+        <!-- Third party plugin JS-->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
+        <!-- Core theme JS-->
+        <script src="js/scripts.js"></script>
+    </body>
+</html> 
+ 36  docker-compose.yml 
+@@ -0,0 +1,36 @@
+version: "3.7" 
+services:
+  nginx:
+    image: nginx:1.17.3
+    container_name: nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ".:/var/www/html/"
+      - "./webserver/nginx.conf:/etc/nginx/nginx.conf"
+    links:
+      - php
+      - mysql
+  php:
+    build:
+      context: .
+    image: phpdocker
+    container_name: php
+    ports:
+      - "9000:9000"
+    volumes:
+      - ".:/var/www/html/"
+  mysql:
+    image: mysql:5.7
+    container_name: mysql
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql:/var/lib/mysql/
+    environment:
+      MYSQL_DATABASE: 'database'
+      MYSQL_USER: 'root'
+      MYSQL_PASSWORD: '12345678'
+      MYSQL_ROOT_PASSWORD: '12345'
+volumes:
+  mysql:
+ BIN +22.9 KB public/assets/img/favicon.ico 
+Binary file not shown.
+ BIN +6.45 KB public/assets/img/profile.jpg 
+Binary file not shown.
+ 3  public/css/custom.css 
+@@ -0,0 +1,3 @@
+.custom-class {
+    color: red;
+} 
+ 10,114  public/css/styles.css 
+Large diffs are not rendered by default.
+
+ BIN +6.45 KB public/images/profile.jpg 
+Binary file not shown.
+ 7  public/index.php 
+@@ -0,0 +1,7 @@
+<?php
+
+require_once '../app/init.php';
+
+$app = new App;
+
+?> 
+ 3  public/js/custom.js 
+@@ -0,0 +1,3 @@
+function testFunction() {
+    return 0;
+} 
+ 42  public/js/scripts.js 
+@@ -0,0 +1,42 @@
+/*!
+    * Start Bootstrap - Resume v6.0.2 (https://startbootstrap.com/theme/resume)
+    * Copyright 2013-2020 Start Bootstrap
+    * Licensed under MIT (https://github.com/StartBootstrap/startbootstrap-resume/blob/master/LICENSE)
+    */
+    (function ($) {
+    "use strict"; // Start of use strict
+
+    // Smooth scrolling using jQuery easing
+    $('a.js-scroll-trigger[href*="#"]:not([href="#"])').click(function () {
+        if (
+            location.pathname.replace(/^\//, "") ==
+                this.pathname.replace(/^\//, "") &&
+            location.hostname == this.hostname
+        ) {
+            var target = $(this.hash);
+            target = target.length
+                ? target
+                : $("[name=" + this.hash.slice(1) + "]");
+            if (target.length) {
+                $("html, body").animate(
+                    {
+                        scrollTop: target.offset().top,
+                    },
+                    1000,
+                    "easeInOutExpo"
+                );
+                return false;
+            }
+        }
+    });
+
+    // Closes responsive menu when a scroll trigger link is clicked
+    $(".js-scroll-trigger").click(function () {
+        $(".navbar-collapse").collapse("hide");
+    });
+
+    // Activate scrollspy to add active class to navbar items on scroll
+    $("body").scrollspy({
+        target: "#sideNav",
+    });
+})(jQuery); // End of use strict
+ 53  webserver/nginx.conf 
+@@ -0,0 +1,53 @@
+user nginx;
+worker_processes 1;
+
+error_log /var/log/nginx/error.log warn;
+pid       /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request"'
+                    '$status $body_bytes_sent "$http_referer"'
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+
+    sendfile on;
+
+    keepalive_timeout 65;
+
+    server {
+
+        listen       80;
+        server_name  localhost;
+        root         /var/www/html/public/;
+        autoindex    on;
+        index        index.php;
+
+        location / {
+
+            try_files $uri $uri/ /index.php;       
+
+            location = /index.php {
+
+                fastcgi_pass   php:9000;
+                fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                include        fastcgi_params;
+
+            }     
+
+        }
+
+        location ~ \.php$ {
+            return 444;
+        }
+
+    }
+}
