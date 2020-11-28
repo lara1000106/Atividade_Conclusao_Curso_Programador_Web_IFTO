@@ -1,0 +1,743 @@
+Dockerfile 
+@@ -0,0 +1,2 @@
+FROM php:7.1-fpm
+RUN docker-php-ext-install pdo_mysql
+ 17  README.md 
+@@ -0,0 +1,17 @@
+# Model View Controller - Design Pattern para PHP
+
+## Modelos
+
+Todas as funções do banco de dados são armazenadas aqui.
+Cada tabela tem seu próprio objeto dentro da pasta do modelo.
+
+## Visualizações
+
+Todas as páginas da web são armazenadas aqui.
+Cada página tem sua própria pasta com um index.php.
+Todos os dados são passados para a visualização por meio da variável $ data.
+
+## Controller
+
+Todas as funcionalidades são armazenadas aqui.
+Todos os modelos são chamados dentro dos controladores e podem ser modificados e depois passados para a visualização.
+ 4  app/.htaccess 
+@@ -0,0 +1,4 @@
+# Prevents access to the app folder
+
+Options -Indexes
+
+ 58  app/controllers/Contact.php 
+@@ -0,0 +1,58 @@
+<?php
+
+class Contact extends Controller {
+
+
+    // Index of the home page (localhost/home(/index))
+    public function index($param1= '', $param2= '', $param3= '') {
+
+        // Initialize Alunos model
+        $test = $this->model('Alunos');
+
+        // Call function from the model
+        $testData = $test->getAlunosFunction();
+
+        $this->view('contact/index', ['alunos' => $testData]);
+    }
+    public function teste($param1= '', $param2= '', $param3= ''){
+        $test = $this->model('Alunos');
+        $alunos = $test->getAlunosForName($param2);
+        $this->view('contact/index', ['alunos' => $alunos]);
+    }
+    public function aluno($id){
+        $aluno = $this->model('Alunos');
+        $valor = $aluno->getAlunoForId($id);
+        return $valor;
+    }
+    public function adicionaAluno(){
+        $nome = $_POST["nome"];
+        $idade = $_POST["idade"];
+        $aluno = $this->model('Alunos');
+       if($aluno->createAluno([$nome,$idade]))
+       echo "cadastro executado com sucesso!!";
+    }
+    public function alteraAluno(){
+        $id = $_POST["id"];
+        $nome = $_POST["nome"];
+        $idade = $_POST["idade"];
+
+        $aluno = $this->model('Alunos');
+       if($aluno->alterAluno([$nome,$idade,$id]))
+       echo "cadastro alterado com sucesso!!";
+    }
+
+    public function  formAlter($param1= '', $param2= '', $param3= ''){
+        $aluno = $this->aluno($param2);
+        $this->view('contact/form2', ['aluno' => $aluno[0]]);
+
+    }
+    public function deleteAluno($param1= '', $param2= '', $param3= ''){
+        $id = $param2;
+        $aluno = $this->model('Alunos');
+       if($aluno->deleteAluno([$id]))
+       echo "cadastro excluido com sucesso!!";
+
+    }
+}
+
+?> 
+ 14  app/controllers/Home.php 
+@@ -0,0 +1,14 @@
+<?php
+class Home extends Controller {
+
+    public function index($param1= '', $param2= '', $param3= '') {
+        $this->view('home/index');
+    } 
+    public function form(){
+        echo "esse e seu formulario";
+    }
+    public function cadastro(){
+        echo "voce foi cadastrado";
+    }
+}
+?> 
+ 49  app/core/App.php 
+@@ -0,0 +1,49 @@
+<?php
+
+class App
+{
+    protected $controller = 'home';
+    protected $method = 'index';
+    protected $params = [];
+
+    public function __construct() {
+        // Parse url into readable string
+        $url = $this->parseUrl();
+
+
+        // Get controller
+        if (file_exists('../app/controllers/' . $url[1] . '.php')) {
+            $this->controller = $url[1];
+            unset($url[1]);
+        }
+        //$this->controller ='contact';
+
+        // If controller (url[0]) doesn't exist it will use 'home' automatically
+        require_once '../app/controllers/' . $this->controller . '.php';
+
+        // Create a new instance of the controller
+        $this->controller = new $this->controller;
+
+        // Get method
+        if (isset($url[2])) {
+            if (method_exists($this->controller, $url[2])) {
+                $this->method = $url[2];
+                unset($url[2]);
+            }
+        }
+
+        // Get parameters
+        $this->params = $url ? array_values($url) : [];
+
+        // Calls the specific controller, method and pass the parameters to them
+        call_user_func_array([$this->controller, $this->method], $this->params);
+    }
+
+    // Parse url  into useable array
+    private function parseUrl() {
+        if (isset($_SERVER['REQUEST_URI']))
+            return $url = explode('/', filter_var(rtrim($_SERVER['REQUEST_URI'], '/'), FILTER_SANITIZE_URL));
+    }
+}
+
+?> 
+ 17  app/core/Controller.php 
+@@ -0,0 +1,17 @@
+<?php
+
+class Controller {
+
+    // Create a new instance of a model
+    protected function model($model) {
+        require_once '../app/models/' . $model . '.php';
+        return new $model();
+    }
+
+    // Load data to a specific view
+    protected function view($view, $data = []) {
+        require_once '../app/views/' . $view . '.php';
+    }
+}
+
+?> 
+ 29  app/core/Database.php 
+@@ -0,0 +1,29 @@
+<?php
+
+class Database {
+
+
+
+    private static function connect() {
+        $pdo =  new PDO('mysql:host=mysql;dbname=aula', 'root', '12345');
+        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_OBJ);
+        $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+        return $pdo;
+    }
+
+    public static function query($query, $params = array()) {
+        $stmt = self::connect()->prepare($query);
+        $stmt->execute($params);
+        $data = $stmt->fetchAll();
+        return $data;
+    }
+
+    public static function add($sql, $params = array()){
+
+        $stmt = self::connect()->prepare($sql);
+        $stmt->execute($params);
+        return true;
+    }
+}
+
+?> 
+ 6  app/init.php 
+@@ -0,0 +1,6 @@
+<?php
+    // Include all the core files
+    require_once 'core/App.php';
+    require_once 'core/Controller.php';
+    require_once 'core/Database.php';
+?> 
+ 29  app/models/Alunos.php 
+@@ -0,0 +1,29 @@
+<?php
+
+class Alunos {
+
+
+    public function getAlunosFunction() {
+        return Database::query("SELECT * FROM alunos");
+    }
+    public function getAlunosForName($nome){
+        return Database::query("SELECT * FROM alunos where nome = ?", [$nome]);
+    }
+    public function getAlunoForId($id){
+        return Database::query("SELECT * FROM alunos where idalunos = ?", [$id]);
+    }
+    public function createAluno($valores){
+        return Database::add($sql = "INSERT INTO `aula`.`alunos` (`nome`, `idade`) VALUES (?, ?)", $valores);
+    } 
+    public function alterAluno($valores){
+        $sql ="UPDATE `aula`.`alunos` SET `nome` = ?, `idade` = ? WHERE (`idalunos` = ?);";
+        return Database::add ($sql,$valores);
+    }
+
+    public function deleteAluno($valores){
+        $sql ="DELETE FROM `aula`.`alunos` WHERE (`idalunos` = ?)";
+        return Database::add ($sql,$valores);
+    }
+}
+
+?> 
+ 16  app/views/contact/filtro.php 
+@@ -0,0 +1,16 @@
+<html>
+    <head>
+
+    </head>
+    <body>
+        <h1>Lista de alunos por nome</h1>
+        <ul>
+        <?php
+
+            foreach($data['alunos'] as $aluno){
+                echo "<li>".$aluno->nome." tem ".$aluno->idade." anos;</li>";
+            }
+        ?>
+       <ul>
+    </body>
+</html> 
+ 56  app/views/contact/form2.php 
+@@ -0,0 +1,56 @@
+<?php $aluno = $data['aluno'];?>
+<?php 
+    $this->view('home/cabecario');
+?>
+<form name="cadastro" action="http://localhost:8080/contact/alteraAluno" method="POST">
+  <div class="form-group row">
+    <label class="col-4 col-form-label" for="nome">Nome</label> 
+    <div class="col-8">
+      <div class="input-group">
+        <div class="input-group-prepend">
+          <div class="input-group-text">
+            <i class="fa fa-address-card"></i>
+          </div>
+        </div> 
+        <input id="id" name="id" type="hidden" value="<?=$aluno->idalunos;?>">
+        <input id="nome" name="nome" value="<?=$aluno->nome;?>" placeholder="informe seu nome" type="text" class="form-control" aria-describedby="nomeHelpBlock" required="required">
+      </div> 
+      <span id="nomeHelpBlock" class="form-text text-muted">Informe seu nome completo</span>
+    </div>
+  </div>
+  <div class="form-group row">
+    <label for="idade" class="col-4 col-form-label">Idade</label> 
+    <div class="col-8">
+      <div class="input-group">
+        <div class="input-group-prepend">
+          <div class="input-group-text">
+            <i class="fa fa-bullseye"></i>
+          </div>
+        </div> 
+        <input id="idade" name="idade" value="<?=$aluno->idade;?>" placeholder="informe sua idade" type="text" required="required" class="form-control">
+      </div>
+    </div>
+  </div>
+  <div class="form-group row">
+    <label class="col-4">Sexo</label> 
+    <div class="col-8">
+      <div class="custom-control custom-radio custom-control-inline">
+        <input name="radio" id="radio_0" type="radio" class="custom-control-input" value="masc"> 
+        <label for="radio_0" class="custom-control-label">Masculino</label>
+      </div>
+      <div class="custom-control custom-radio custom-control-inline">
+        <input name="radio" id="radio_1" type="radio" class="custom-control-input" value="fem"> 
+        <label for="radio_1" class="custom-control-label">Feminino</label>
+      </div>
+    </div>
+  </div> 
+  <div class="form-group row">
+    <div class="offset-4 col-8">
+      <button name="submit" type="submit" class="btn btn-primary">Enviar</button>
+    </div>
+  </div>
+</form>
+
+<?php 
+    $this->view('home/rodape');
+?> 
+ 16  app/views/contact/index.php 
+@@ -0,0 +1,16 @@
+<html>
+    <head>
+
+    </head>
+    <body>
+        <h1>Lista de alunos</h1>
+        <ul>
+        <?php
+
+            foreach($data['alunos'] as $aluno){
+                echo "<li>".$aluno->nome." tem ".$aluno->idade." anos;</li>";
+            }
+        ?>
+       <ul>
+    </body>
+</html> 
+ 23  app/views/home/cabecario.php 
+@@ -0,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="description" content="" />
+    <meta name="author" content="" />
+    <title>Pagina de Portifolio</title>
+    <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico" />
+    <!-- Font Awesome icons (free version)-->
+    <script src="https://use.fontawesome.com/releases/v5.15.1/js/all.js" crossorigin="anonymous"></script>
+    <!-- Google fonts-->
+    <link href="https://fonts.googleapis.com/css?family=Saira+Extra+Condensed:500,700" rel="stylesheet"
+        type="text/css" />
+    <link href="https://fonts.googleapis.com/css?family=Muli:400,400i,800,800i" rel="stylesheet" type="text/css" />
+    <!-- Core theme CSS (includes Bootstrap)-->
+    <link href="css/styles.css" rel="stylesheet" />
+</head>
+
+<body id="page-top"> 
+ 49  app/views/home/form.php 
+@@ -0,0 +1,49 @@
+
+
+<form name="cadastro" action="http://localhost:8080/contact/adicionaAluno" method="POST">
+  <div class="form-group row">
+    <label class="col-4 col-form-label" for="nome">Nome</label> 
+    <div class="col-8">
+      <div class="input-group">
+        <div class="input-group-prepend">
+          <div class="input-group-text">
+            <i class="fa fa-address-card"></i>
+          </div>
+        </div> 
+        <input id="nome" name="nome" placeholder="informe seu nome" type="text" class="form-control" aria-describedby="nomeHelpBlock" required="required">
+      </div> 
+      <span id="nomeHelpBlock" class="form-text text-muted">Informe seu nome completo</span>
+    </div>
+  </div>
+  <div class="form-group row">
+    <label for="idade" class="col-4 col-form-label">Idade</label> 
+    <div class="col-8">
+      <div class="input-group">
+        <div class="input-group-prepend">
+          <div class="input-group-text">
+            <i class="fa fa-bullseye"></i>
+          </div>
+        </div> 
+        <input id="idade" name="idade" placeholder="informe sua idade" type="text" required="required" class="form-control">
+      </div>
+    </div>
+  </div>
+  <div class="form-group row">
+    <label class="col-4">Sexo</label> 
+    <div class="col-8">
+      <div class="custom-control custom-radio custom-control-inline">
+        <input name="radio" id="radio_0" type="radio" class="custom-control-input" value="masc"> 
+        <label for="radio_0" class="custom-control-label">Masculino</label>
+      </div>
+      <div class="custom-control custom-radio custom-control-inline">
+        <input name="radio" id="radio_1" type="radio" class="custom-control-input" value="fem"> 
+        <label for="radio_1" class="custom-control-label">Feminino</label>
+      </div>
+    </div>
+  </div> 
+  <div class="form-group row">
+    <div class="offset-4 col-8">
+      <button name="submit" type="submit" class="btn btn-primary">Enviar</button>
+    </div>
+  </div>
+</form> 
+ 114  app/views/home/index.php 
+@@ -0,0 +1,114 @@
+<?php 
+    $this->view('home/cabecario');
+?>
+<!-- Navigation-->
+<?php
+            $this->view('home/menu');
+        ?>
+<!-- Page Content-->
+<div class="container-fluid p-0">
+    <!-- About-->
+    <section class="resume-section" id="about">
+        <div class="resume-section-content">
+            <h1 class="mb-0">
+                Thomas
+                <span class="text-primary">Frankliyn</span>
+            </h1>
+            <div class="subheading mb-5">
+                Rau I, 21 . Vitória da Conquista . (77) 585-8468 ·
+                <a href="mailto:name@email.com">Thomas@email.com</a>
+            </div>
+            <p class="lead mb-5">Iniciei meus estudos de na área de informática, aos 13 anos com um curso básico,
+                e fiquei fascinado, quando conclui os estudos do ensino médio, fiz um curso técnico no
+                IFBA,
+                e seis anos depois ingressei na graduação no mesmo IFBA, em Sistemas de Informação,
+                que estou cursando e quero muito desenvolver na área de programador.</p>
+            <div class="social-icons">
+                <a class="social-icon" href="https://github.com/ThomasFrankliyn"><i class="fab fa-github"></i></a>
+                <a class="social-icon" href="https://twitter.com/login?lang=pt"><i class="fab fa-twitter"></i></a>
+                <a class="social-icon" href="https://www.facebook.com/"><i class="fab fa-facebook-f"></i></a>
+            </div>
+        </div>
+    </section>
+    <hr class="m-0" />
+    <!-- Experience-->
+    <section class="resume-section" id="experience">
+        <div class="resume-section-content">
+            <h2 class="mb-5">Experiencia</h2>
+            <div class="d-flex flex-column flex-md-row justify-content-between mb-5">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Técnico em Informática</h3>
+                    <p>Realizar de maneira eficiente, manutençãos preventivas e corretivas
+                        em equipamentos de informática.</p>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">Março 2013 - Janeiro 2015</span></div>
+            </div>
+            <div class="d-flex flex-column flex-md-row justify-content-between mb-5">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Assistente Administrativo</h3>
+                    <p>Atendimento ao público, organizar e
+                        manter auquivos e lidar com planilhas.</p>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">Abril 2015 - Setembro 2017</span></div>
+            </div>
+            <div class="d-flex flex-column flex-md-row justify-content-between mb-5">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Desenvolvedor web</h3>
+                    <p>desenvolver paginas web, que sejam funcionais e que atendam
+                        as nescessidades das empresa.</p>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">Julho 2018 - presente</span></div>
+            </div>
+    </section>
+    <hr class="m-0" />
+    <!-- Education-->
+    <section class="resume-section" id="education">
+        <div class="resume-section-content">
+            <h2 class="mb-5">Educação</h2>
+            <div class="d-flex flex-column flex-md-row justify-content-between mb-5">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Colégio Estadual Abdias Menezes</h3>
+                    <div class="subheading mb-3">Ensino Médio</div>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">Fevereiro 2007 - Dezembro 2009</span></div>
+            </div>
+            <div class="d-flex flex-column flex-md-row justify-content-between">
+                <div class="flex-grow-1">
+                    <h3 class="mb-0">Instituto Federal da Bahia</h3>
+                    <div class="subheading mb-3">Técnico em Informática</div>
+                </div>
+                <div class="flex-shrink-0"><span class="text-primary">Março 2009 - Agosto 2012</span></div>
+            </div>
+        </div>
+    </section>
+    <hr class="m-0" />
+    <!-- Form-->
+    <section class="resume-section" id="interests">
+        <div class="resume-section-content">
+            <?php 
+                $this->view('home/form');
+            ?>
+        </div>
+    </section>
+    <hr class="m-0" />
+    <!-- Awards-->
+    <section class="resume-section" id="awards">
+        <div class="resume-section-content">
+            <h2 class="mb-5">Certificados</h2>
+            <ul class="fa-ul mb-0">
+                <li>
+                    <span class="fa-li"><i class="fas fa-trophy text-warning"></i></span>
+                    Técnico em Informática
+                </li>
+                <li>
+                    <span class="fa-li"><i class="fas fa-trophy text-warning"></i></span>
+                    Programador Web
+                </li>
+                <li>
+        </div>
+    </section>
+</div>
+
+<?php 
+    $this->view('home/rodape');
+?> 
+ 19  app/views/home/menu.php 
+@@ -0,0 +1,19 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top" id="sideNav">
+    <a class="navbar-brand js-scroll-trigger" href="#page-top">
+        <span class="d-block d-lg-none">Thomas Frankliyn</span>
+        <span class="d-none d-lg-block"><img class="img-fluid img-profile rounded-circle mx-auto mb-2"
+                src="assets/img/Capa.jpg" alt="" /></span>
+    </a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent"
+        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span
+            class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav">
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#about">Quem sou eu</a></li>
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#experience">Experiencia</a></li>
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#education">Educação</a></li>
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#interests">Formulario</a></li>
+            <li class="nav-item"><a class="nav-link js-scroll-trigger" href="#awards">Certificados</a></li>
+        </ul>
+    </div>
+</nav> 
+ 10  app/views/home/rodape.php 
+@@ -0,0 +1,10 @@
+ <!-- Bootstrap core JS-->
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+ <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"></script>
+ <!-- Third party plugin JS-->
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
+ <!-- Core theme JS-->
+ <script src="js/scripts.js"></script>
+ </body>
+
+ </html> 
+ 36  docker-compose.yml 
+@@ -0,0 +1,36 @@
+version: "3.7"
+services:
+    nginx:
+        image: nginx:1.17.3
+        container_name: nginx
+        ports:
+            - "8080:80"
+        volumes:
+            - ".:/var/www/html/"
+            - "./webserver/nginx.conf:/etc/nginx/nginx.conf"
+        links:
+            - php
+            - mysql
+    php:
+        build:
+            context: .
+        image: phpdocker
+        container_name: php
+        ports:
+            - "9000:9000"
+        volumes:
+            - ".:/var/www/html/"
+    mysql:
+        image: mysql:5.7
+        container_name: mysql
+        ports:
+            - "3307:3306"
+        volumes:
+            - mysql:/var/lib/mysql/
+        environment:
+            MYSQL_DATABASE: "database"
+            MYSQL_USER: "root"
+            MYSQL_PASSWORD: "12345678"
+            MYSQL_ROOT_PASSWORD: "12345"
+volumes:
+    mysql:
+ 13  public/.htaccess 
+@@ -0,0 +1,13 @@
+# Deletes the .php from the files
+Options -MultiViews
+RewriteEngine On
+
+# Rewrite the url (development)
+# TODO Change or delete the Rewrite base when development is over
+RewriteBase /public
+
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+
+#Rewrite parameters
+RewriteRule ^(.+)$ index.php?url=$1 [QSA,L] 
+ BIN +22.9 KB public/assets/img/favicon.ico 
+Binary file not shown.
+ BIN +211 KB public/assets/img/profile.jpg 
+Binary file not shown.
+ 3  public/css/custom.css 
+@@ -0,0 +1,3 @@
+.custom-class {
+    color: red;
+} 
+ 10,114  public/css/styles.css 
+Large diffs are not rendered by default.
+
+ 0  public/images/test.jpg 
+Empty file.
+ 7  public/index.php 
+@@ -0,0 +1,7 @@
+<?php
+
+require_once '../app/init.php';
+
+$app = new App;
+
+?> 
+ 3  public/js/custom.js 
+@@ -0,0 +1,3 @@
+function testFunction() {
+    return 0;
+} 
+ 42  public/js/scripts.js 
+@@ -0,0 +1,42 @@
+/*!
+    * Start Bootstrap - Resume v6.0.2 (https://startbootstrap.com/theme/resume)
+    * Copyright 2013-2020 Start Bootstrap
+    * Licensed under MIT (https://github.com/StartBootstrap/startbootstrap-resume/blob/master/LICENSE)
+    */
+    (function ($) {
+    "use strict"; // Start of use strict
+
+    // Smooth scrolling using jQuery easing
+    $('a.js-scroll-trigger[href*="#"]:not([href="#"])').click(function () {
+        if (
+            location.pathname.replace(/^\//, "") ==
+                this.pathname.replace(/^\//, "") &&
+            location.hostname == this.hostname
+        ) {
+            var target = $(this.hash);
+            target = target.length
+                ? target
+                : $("[name=" + this.hash.slice(1) + "]");
+            if (target.length) {
+                $("html, body").animate(
+                    {
+                        scrollTop: target.offset().top,
+                    },
+                    1000,
+                    "easeInOutExpo"
+                );
+                return false;
+            }
+        }
+    });
+
+    // Closes responsive menu when a scroll trigger link is clicked
+    $(".js-scroll-trigger").click(function () {
+        $(".navbar-collapse").collapse("hide");
+    });
+
+    // Activate scrollspy to add active class to navbar items on scroll
+    $("body").scrollspy({
+        target: "#sideNav",
+    });
+})(jQuery); // End of use strict
+ 53  webserver/nginx.conf 
+@@ -0,0 +1,53 @@
+user nginx;
+worker_processes 1;
+
+error_log /var/log/nginx/error.log warn;
+pid       /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request"'
+                    '$status $body_bytes_sent "$http_referer"'
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+
+    sendfile on;
+
+    keepalive_timeout 65;
+
+    server {
+
+        listen       80;
+        server_name  localhost;
+        root         /var/www/html/public/;
+        autoindex    on;
+        index        index.php;
+
+        location / {
+
+            try_files $uri $uri/ /index.php;       
+
+            location = /index.php {
+
+                fastcgi_pass   php:9000;
+                fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                include        fastcgi_params;
+
+            }     
+
+        }
+
+        location ~ \.php$ {
+            return 444;
+        }
+
+    }
+}
